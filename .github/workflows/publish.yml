@@ -1,0 +1,58 @@
+name: Train and Publish to HuggingFace
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  train-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download training data
+        run: |
+          mkdir -p data
+          curl -o data/pride_and_prejudice.txt https://www.gutenberg.org/cache/epub/1342/pg1342.txt
+          curl -o data/sense_and_sensibility.txt https://www.gutenberg.org/cache/epub/161/pg161.txt
+          curl -o data/jane_eyre.txt https://www.gutenberg.org/cache/epub/1260/pg1260.txt
+
+      - name: Train model
+        run: python train.py
+
+      - name: Verify artifacts
+        run: |
+          test -f romantic_gpt.keras
+          test -f tokenizer_config.json
+          echo "Model and tokenizer config created successfully"
+
+      - name: Upload to HuggingFace
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -c "
+          from huggingface_hub import login, upload_folder
+          import os
+
+          login(token=os.environ['HF_TOKEN'])
+          upload_folder(
+              folder_path='.',
+              repo_id='yablokolabs/romanticGPT',
+              repo_type='model',
+              ignore_patterns=['data/*', 'tests/*', '.git/*', '.github/*',
+                               '__pycache__/*', '.pytest_cache/*', '.gitignore',
+                               'venv/*', '.venv/*'],
+          )
+          print('Uploaded to yablokolabs/romanticGPT')
+          "
